@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	stepsInTrack  = 16
-	playSoundMark = "x"
+	stepsInTrack = 16
 )
 
 type Pattern struct {
@@ -60,13 +59,22 @@ func DecodeFile(path string) (*Pattern, error) {
 	var tracks []track
 
 	for {
-		err = binary.Read(file, binary.BigEndian, &trackHeader)
-		if err == io.EOF {
+		offset, err := file.Seek(0, os.SEEK_CUR)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to determine current seek position")
+		}
+
+		if offset > header.FileSize {
 			break
 		}
 
+		err = binary.Read(file, binary.BigEndian, &trackHeader)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to read track header")
+		}
+
 		trackName := make([]byte, trackHeader.WordSize)
-		_, err := io.ReadFull(file, trackName)
+		_, err = io.ReadFull(file, trackName)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to read track name")
 		}
@@ -99,7 +107,7 @@ func DecodeFile(path string) (*Pattern, error) {
 		Tracks:  tracks,
 	}
 
-	return &pattern, err
+	return &pattern, nil
 }
 
 func (p *Pattern) String() string {
@@ -117,7 +125,7 @@ func (p *Pattern) String() string {
 
 func (t track) String() string {
 	trackHeader := fmt.Sprintf("(%v) %v\t", t.ID, t.Name)
-	trackBody := fmt.Sprintf("|%s|%s|%s|%s|\n", t.Steps[0:4], t.Steps[4:8], t.Steps[8:12], t.Steps[12:15])
+	trackBody := fmt.Sprintf("|%s|%s|%s|%s|\n", t.Steps[0:4], t.Steps[4:8], t.Steps[8:12], t.Steps[12:16])
 
 	return trackHeader + trackBody
 }
