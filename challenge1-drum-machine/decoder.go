@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 )
 
-const (
-	stepsInTrack = 16
-)
-
+// NOTE TO REVIEWER:
+// Using package scope for types you don't want the consumer to instantiate
+// themselves, always seems like a good pattern to me.
+// In this case, I'm allowing the user to get a pattern back (from calling DecodeFile),
+// but I don't want them creating their own.
+// However, go-lint always complains about this being "confusing"
 type pattern struct {
 	Version string
 	Tempo   float32
@@ -64,7 +65,6 @@ func DecodeFile(path string) (*pattern, error) {
 }
 
 func readHeader(file io.Reader, p *pattern) error {
-
 	var header struct {
 		Splice   [6]byte
 		FileSize int64
@@ -75,21 +75,20 @@ func readHeader(file io.Reader, p *pattern) error {
 	if err != nil {
 		return fmt.Errorf("Unable to marshal header from binary file")
 	}
-
-	trimmedVersion := string(bytes.Trim(header.Version[:], "\x00"))
-
-	var tempo float32
-	err = binary.Read(file, binary.LittleEndian, &tempo)
-
-	p.Version = trimmedVersion
-	p.Tempo = tempo
 	p.fileSize = header.FileSize
+
+	err = binary.Read(file, binary.LittleEndian, &p.Tempo)
+	if err != nil {
+		return fmt.Errorf("Unable to read pattern tempo")
+	}
+
+	const NullCharacter = "\x00"
+	p.Version = string(bytes.TrimRight(header.Version[:], NullCharacter))
 
 	return nil
 }
 
 func readTrack(file io.Reader, p *pattern) error {
-
 	var trackHeader struct {
 		ID       byte
 		WordSize int32
@@ -106,23 +105,25 @@ func readTrack(file io.Reader, p *pattern) error {
 		return fmt.Errorf("Unable to read track name")
 	}
 
+	const stepsInTrack = 16
 	stepBytes := make([]byte, stepsInTrack)
 	_, err = io.ReadFull(file, stepBytes)
 	if err != nil {
 		return fmt.Errorf("Unable to read track steps")
 	}
 
-	steps := []byte(strings.Repeat("-", stepsInTrack))
-	for k := range steps {
+	for k := range stepBytes {
 		if stepBytes[k] == 1 {
-			steps[k] = 'x'
+			stepBytes[k] = 'x'
+		} else {
+			stepBytes[k] = '-'
 		}
 	}
 
 	track := track{
 		ID:    int(trackHeader.ID),
 		Name:  string(trackName),
-		Steps: steps,
+		Steps: stepBytes,
 	}
 
 	p.Tracks = append(p.Tracks, track)
