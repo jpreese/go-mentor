@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 const (
-	stepsInTrack = 16
+	stepsInTrack  = 16
+	playSoundMark = "x"
 )
 
 type Pattern struct {
@@ -19,9 +21,9 @@ type Pattern struct {
 }
 
 type track struct {
-	id    int
-	name  string
-	steps [stepsInTrack]bool
+	ID    int
+	Name  string
+	Steps []byte
 }
 
 // DecodeFile decodes the drum machine file found at the provided path
@@ -51,7 +53,7 @@ func DecodeFile(path string) (*Pattern, error) {
 	err = binary.Read(file, binary.LittleEndian, &tempo)
 
 	var trackHeader struct {
-		Id       byte
+		ID       byte
 		WordSize int32
 	}
 
@@ -75,15 +77,17 @@ func DecodeFile(path string) (*Pattern, error) {
 			return nil, fmt.Errorf("Unable to read track steps")
 		}
 
-		var steps [stepsInTrack]bool
-		for k := range stepBytes {
-			steps[k] = stepBytes[k] == 1
+		steps := []byte(strings.Repeat("-", stepsInTrack))
+		for k := range steps {
+			if stepBytes[k] == 1 {
+				steps[k] = 'x'
+			}
 		}
 
 		track := track{
-			id:    int(trackHeader.Id),
-			name:  string(trackName),
-			steps: steps,
+			ID:    int(trackHeader.ID),
+			Name:  string(trackName),
+			Steps: steps,
 		}
 
 		tracks = append(tracks, track)
@@ -104,28 +108,16 @@ func (p *Pattern) String() string {
 	result = fmt.Sprintf("Saved with HW Version: %v\n", p.Version)
 	result += fmt.Sprintf("Tempo: %v\n", p.Tempo)
 
-	for k := range p.Tracks {
-		result += fmt.Sprintf("%v", p.Tracks[k])
+	for _, track := range p.Tracks {
+		result += track.String()
 	}
 
 	return result
 }
 
 func (t track) String() string {
+	trackHeader := fmt.Sprintf("(%v) %v\t", t.ID, t.Name)
+	trackBody := fmt.Sprintf("|%s|%s|%s|%s|\n", t.Steps[0:4], t.Steps[4:8], t.Steps[8:12], t.Steps[12:15])
 
-	var result string
-	for index, step := range t.steps {
-		if index%5 == 0 {
-			result += "|"
-		}
-
-		if step {
-			result += "x"
-		} else {
-			result += "-"
-		}
-
-	}
-
-	return fmt.Sprintf("%v\n", result)
+	return trackHeader + trackBody
 }
