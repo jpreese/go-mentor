@@ -38,9 +38,9 @@ func DecodeFile(path string) (*pattern, error) {
 	}
 	defer file.Close()
 
-	pattern := pattern{}
+	p := pattern{}
 
-	err = readHeader(file, &pattern)
+	err = p.readHeader(file)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to read file header")
 	}
@@ -51,20 +51,20 @@ func DecodeFile(path string) (*pattern, error) {
 			return nil, fmt.Errorf("Unable to determine current seek position")
 		}
 
-		if offset > pattern.fileSize {
+		if offset > p.fileSize {
 			break
 		}
 
-		err = readTrack(file, &pattern)
+		err = p.readTrack(file)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to read track")
 		}
 	}
 
-	return &pattern, nil
+	return &p, nil
 }
 
-func readHeader(file io.Reader, p *pattern) error {
+func (p *pattern) readHeader(file io.Reader) error {
 	var header struct {
 		Splice   [6]byte
 		FileSize int64
@@ -77,18 +77,25 @@ func readHeader(file io.Reader, p *pattern) error {
 	}
 	p.fileSize = header.FileSize
 
+	// We use binary.LittleEndian here because the pattern file stores
+	// the tempo value in LittleEndian.
 	err = binary.Read(file, binary.LittleEndian, &p.Tempo)
 	if err != nil {
 		return fmt.Errorf("Unable to read pattern tempo")
 	}
 
+	// NOTE TO REVIEWER:
+	// It may seem a little verbose to store \x00 into its own const
+	// but I personally am a fan of avoiding magic strings wherever possible.
+	// Even though the value is only used once, it should be easier on the
+	// reader to identify what is going on.
 	const NullCharacter = "\x00"
 	p.Version = string(bytes.TrimRight(header.Version[:], NullCharacter))
 
 	return nil
 }
 
-func readTrack(file io.Reader, p *pattern) error {
+func (p *pattern) readTrack(file io.Reader) error {
 	var trackHeader struct {
 		ID       byte
 		WordSize int32
@@ -112,6 +119,14 @@ func readTrack(file io.Reader, p *pattern) error {
 		return fmt.Errorf("Unable to read track steps")
 	}
 
+	// NOTE TO REVIEWER:
+	// I wavered back and forth as to where to put this logic, and ultimately
+	// decided to put it during the Decode() operation as I wanted the call to
+	// .String() to be snappier. I imagine there would be more read operations
+	// once the file has been decoded.
+	// However, depending upon the intended use of the .Steps property in the API
+	// it may be more beneficial to leave them as binary values if the consumer needs
+	// them in that format to make musical sounds?
 	for k := range stepBytes {
 		if stepBytes[k] == 1 {
 			stepBytes[k] = 'x'
