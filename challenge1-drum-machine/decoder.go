@@ -13,10 +13,12 @@ const (
 	stepsInTrack = 16
 )
 
-type Pattern struct {
+type pattern struct {
 	Version string
 	Tempo   float32
 	Tracks  []track
+
+	fileSize int64
 }
 
 type track struct {
@@ -28,35 +30,19 @@ type track struct {
 // DecodeFile decodes the drum machine file found at the provided path
 // and returns a pointer to a parsed pattern which is the entry point to the
 // rest of the data.
-func DecodeFile(path string) (*Pattern, error) {
+func DecodeFile(path string) (*pattern, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	var header struct {
-		Splice   [6]byte  // 6 bytes
-		FileSize int64    // 8 bytes
-		Version  [32]byte // 32 bytes
-	}
+	pattern := pattern{}
 
-	err = binary.Read(file, binary.BigEndian, &header)
+	err = readHeader(file, &pattern)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to marshal header from binary file")
+		return nil, fmt.Errorf("Unable to read file header")
 	}
-
-	trimmedVersion := string(bytes.Trim(header.Version[:], "\x00"))
-
-	var tempo float32 // 4 bytes
-	err = binary.Read(file, binary.LittleEndian, &tempo)
-
-	var trackHeader struct {
-		ID       byte
-		WordSize int32
-	}
-
-	var tracks []track
 
 	for {
 		offset, err := file.Seek(0, os.SEEK_CUR)
@@ -64,53 +50,87 @@ func DecodeFile(path string) (*Pattern, error) {
 			return nil, fmt.Errorf("Unable to determine current seek position")
 		}
 
-		if offset > header.FileSize {
+		if offset > pattern.fileSize {
 			break
 		}
 
-		err = binary.Read(file, binary.BigEndian, &trackHeader)
+		err = readTrack(file, &pattern)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to read track header")
+			return nil, fmt.Errorf("Unable to read track")
 		}
-
-		trackName := make([]byte, trackHeader.WordSize)
-		_, err = io.ReadFull(file, trackName)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to read track name")
-		}
-
-		stepBytes := make([]byte, stepsInTrack)
-		_, err = io.ReadFull(file, stepBytes)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to read track steps")
-		}
-
-		steps := []byte(strings.Repeat("-", stepsInTrack))
-		for k := range steps {
-			if stepBytes[k] == 1 {
-				steps[k] = 'x'
-			}
-		}
-
-		track := track{
-			ID:    int(trackHeader.ID),
-			Name:  string(trackName),
-			Steps: steps,
-		}
-
-		tracks = append(tracks, track)
-	}
-
-	pattern := Pattern{
-		Version: trimmedVersion,
-		Tempo:   tempo,
-		Tracks:  tracks,
 	}
 
 	return &pattern, nil
 }
 
-func (p *Pattern) String() string {
+func readHeader(file io.Reader, p *pattern) error {
+
+	var header struct {
+		Splice   [6]byte
+		FileSize int64
+		Version  [32]byte
+	}
+
+	err := binary.Read(file, binary.BigEndian, &header)
+	if err != nil {
+		return fmt.Errorf("Unable to marshal header from binary file")
+	}
+
+	trimmedVersion := string(bytes.Trim(header.Version[:], "\x00"))
+
+	var tempo float32
+	err = binary.Read(file, binary.LittleEndian, &tempo)
+
+	p.Version = trimmedVersion
+	p.Tempo = tempo
+	p.fileSize = header.FileSize
+
+	return nil
+}
+
+func readTrack(file io.Reader, p *pattern) error {
+
+	var trackHeader struct {
+		ID       byte
+		WordSize int32
+	}
+
+	err := binary.Read(file, binary.BigEndian, &trackHeader)
+	if err != nil {
+		return fmt.Errorf("Unable to read track header")
+	}
+
+	trackName := make([]byte, trackHeader.WordSize)
+	_, err = io.ReadFull(file, trackName)
+	if err != nil {
+		return fmt.Errorf("Unable to read track name")
+	}
+
+	stepBytes := make([]byte, stepsInTrack)
+	_, err = io.ReadFull(file, stepBytes)
+	if err != nil {
+		return fmt.Errorf("Unable to read track steps")
+	}
+
+	steps := []byte(strings.Repeat("-", stepsInTrack))
+	for k := range steps {
+		if stepBytes[k] == 1 {
+			steps[k] = 'x'
+		}
+	}
+
+	track := track{
+		ID:    int(trackHeader.ID),
+		Name:  string(trackName),
+		Steps: steps,
+	}
+
+	p.Tracks = append(p.Tracks, track)
+
+	return nil
+}
+
+func (p *pattern) String() string {
 	var result string
 
 	result = fmt.Sprintf("Saved with HW Version: %v\n", p.Version)
