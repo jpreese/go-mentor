@@ -29,6 +29,17 @@ type Pattern struct {
 	fileSize int64
 }
 
+func (p *Pattern) String() string {
+	result := fmt.Sprintf("Saved with HW Version: %v\n", p.Version)
+	result += fmt.Sprintf("Tempo: %v\n", p.Tempo)
+
+	for _, track := range p.Tracks {
+		result += track.String()
+	}
+
+	return result
+}
+
 func (p *Pattern) readHeader(file io.Reader) error {
 	var header struct {
 		Splice   [6]byte
@@ -91,15 +102,4 @@ func (p *Pattern) readTrack(file io.Reader) error {
 	p.Tracks = append(p.Tracks, track)
 
 	return nil
-}
-
-func (p *Pattern) String() string {
-	result := fmt.Sprintf("Saved with HW Version: %v\n", p.Version)
-	result += fmt.Sprintf("Tempo: %v\n", p.Tempo)
-
-	for _, track := range p.Tracks {
-		result += track.String()
-	}
-
-	return result
 }
