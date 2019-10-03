@@ -18,13 +18,13 @@ func DecodeFile(path string) (*Pattern, error) {
 	var p Pattern
 
 	if err := p.readHeader(file); err != nil {
-		return nil, fmt.Errorf("Unable to read file header")
+		return nil, fmt.Errorf("unable to read file header: %w", err)
 	}
 
 	for {
 		offset, err := file.Seek(0, os.SEEK_CUR)
 		if err != nil {
-			return nil, fmt.Errorf("Unable to determine current seek position")
+			return nil, fmt.Errorf("unable to determine current seek position: %w", err)
 		}
 
 		if offset > p.fileSize {
@@ -32,7 +32,7 @@ func DecodeFile(path string) (*Pattern, error) {
 		}
 
 		if err := p.readTrack(file); err != nil {
-			return nil, fmt.Errorf("Unable to read track")
+			return nil, fmt.Errorf("unable to read track: %w", err)
 		}
 	}
 
