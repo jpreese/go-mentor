@@ -36,16 +36,14 @@ func (p *Pattern) readHeader(file io.Reader) error {
 		Version  [32]byte
 	}
 
-	err := binary.Read(file, binary.BigEndian, &header)
-	if err != nil {
+	if err := binary.Read(file, binary.BigEndian, &header); err != nil {
 		return fmt.Errorf("Unable to marshal header from binary file")
 	}
 	p.fileSize = header.FileSize
 
 	// We use binary.LittleEndian here because the pattern file stores
 	// the tempo value in LittleEndian.
-	err = binary.Read(file, binary.LittleEndian, &p.Tempo)
-	if err != nil {
+	if err := binary.Read(file, binary.LittleEndian, &p.Tempo); err != nil {
 		return fmt.Errorf("Unable to read pattern tempo")
 	}
 
@@ -61,21 +59,18 @@ func (p *Pattern) readTrack(file io.Reader) error {
 		WordSize int32
 	}
 
-	err := binary.Read(file, binary.BigEndian, &trackHeader)
-	if err != nil {
+	if err := binary.Read(file, binary.BigEndian, &trackHeader); err != nil {
 		return fmt.Errorf("Unable to read track header")
 	}
 
 	trackName := make([]byte, trackHeader.WordSize)
-	_, err = io.ReadFull(file, trackName)
-	if err != nil {
+	if _, err := io.ReadFull(file, trackName); err != nil {
 		return fmt.Errorf("Unable to read track name")
 	}
 
 	const stepsInTrack = 16
 	stepBytes := make([]byte, stepsInTrack)
-	_, err = io.ReadFull(file, stepBytes)
-	if err != nil {
+	if _, err := io.ReadFull(file, stepBytes); err != nil {
 		return fmt.Errorf("Unable to read track steps")
 	}
 

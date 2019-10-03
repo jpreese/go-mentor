@@ -8,17 +8,16 @@ import (
 // DecodeFile decodes the drum machine file found at the provided path
 // and returns a pointer to a parsed pattern which is the entry point to the
 // rest of the data.
-func DecodeFile(path string) (*pattern, error) {
+func DecodeFile(path string) (*Pattern, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	p := pattern{}
+	var p Pattern
 
-	err = p.readHeader(file)
-	if err != nil {
+	if err := p.readHeader(file); err != nil {
 		return nil, fmt.Errorf("Unable to read file header")
 	}
 
@@ -32,8 +31,7 @@ func DecodeFile(path string) (*pattern, error) {
 			break
 		}
 
-		err = p.readTrack(file)
-		if err != nil {
+		if err := p.readTrack(file); err != nil {
 			return nil, fmt.Errorf("Unable to read track")
 		}
 	}
