@@ -7,13 +7,21 @@ import (
 	"io"
 )
 
-// NOTE TO REVIEWER:
-// Using package scope for types you don't want the consumer to instantiate
-// themselves, always seems like a good pattern to me.
-// In this case, I'm allowing the user to get a pattern back (from calling DecodeFile),
-// but I don't want them creating their own.
-// However, go-lint always complains about this being "confusing"
-type pattern struct {
+type track struct {
+	ID    int
+	Name  string
+	Steps []byte
+}
+
+func (t track) String() string {
+	trackHeader := fmt.Sprintf("(%v) %v\t", t.ID, t.Name)
+	trackBody := fmt.Sprintf("|%s|%s|%s|%s|\n", t.Steps[0:4], t.Steps[4:8], t.Steps[8:12], t.Steps[12:16])
+
+	return trackHeader + trackBody
+}
+
+// Pattern represents a decoded drum file
+type Pattern struct {
 	Version string
 	Tempo   float32
 	Tracks  []track
@@ -21,13 +29,7 @@ type pattern struct {
 	fileSize int64
 }
 
-type track struct {
-	ID    int
-	Name  string
-	Steps []byte
-}
-
-func (p *pattern) readHeader(file io.Reader) error {
+func (p *Pattern) readHeader(file io.Reader) error {
 	var header struct {
 		Splice   [6]byte
 		FileSize int64
@@ -47,18 +49,13 @@ func (p *pattern) readHeader(file io.Reader) error {
 		return fmt.Errorf("Unable to read pattern tempo")
 	}
 
-	// NOTE TO REVIEWER:
-	// It may seem a little verbose to store \x00 into its own const
-	// but I personally am a fan of avoiding magic strings wherever possible.
-	// Even though the value is only used once, it should be easier on the
-	// reader to identify what is going on.
 	const NullCharacter = "\x00"
 	p.Version = string(bytes.TrimRight(header.Version[:], NullCharacter))
 
 	return nil
 }
 
-func (p *pattern) readTrack(file io.Reader) error {
+func (p *Pattern) readTrack(file io.Reader) error {
 	var trackHeader struct {
 		ID       byte
 		WordSize int32
@@ -82,14 +79,6 @@ func (p *pattern) readTrack(file io.Reader) error {
 		return fmt.Errorf("Unable to read track steps")
 	}
 
-	// NOTE TO REVIEWER:
-	// I wavered back and forth as to where to put this logic, and ultimately
-	// decided to put it during the Decode() operation as I wanted the call to
-	// .String() to be snappier. I imagine there would be more read operations
-	// once the file has been decoded.
-	// However, depending upon the intended use of the .Steps property in the API
-	// it may be more beneficial to leave them as binary values if the consumer needs
-	// them in that format to make musical sounds?
 	for k := range stepBytes {
 		if stepBytes[k] == 1 {
 			stepBytes[k] = 'x'
@@ -109,10 +98,8 @@ func (p *pattern) readTrack(file io.Reader) error {
 	return nil
 }
 
-func (p *pattern) String() string {
-	var result string
-
-	result = fmt.Sprintf("Saved with HW Version: %v\n", p.Version)
+func (p *Pattern) String() string {
+	result := fmt.Sprintf("Saved with HW Version: %v\n", p.Version)
 	result += fmt.Sprintf("Tempo: %v\n", p.Tempo)
 
 	for _, track := range p.Tracks {
@@ -120,11 +107,4 @@ func (p *pattern) String() string {
 	}
 
 	return result
-}
-
-func (t track) String() string {
-	trackHeader := fmt.Sprintf("(%v) %v\t", t.ID, t.Name)
-	trackBody := fmt.Sprintf("|%s|%s|%s|%s|\n", t.Steps[0:4], t.Steps[4:8], t.Steps[8:12], t.Steps[12:16])
-
-	return trackHeader + trackBody
 }
