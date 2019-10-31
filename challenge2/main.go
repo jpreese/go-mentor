@@ -28,18 +28,17 @@ func NewSecureReader(r io.Reader, priv *[32]byte, pub *[32]byte) io.Reader {
 func (sr *SecureReader) Read(message []byte) (int, error) {
 	var nonce [24]byte
 	fmt.Printf("reader: %v\n", sr.Reader)
-	n, err := io.ReadFull(sr.Reader, nonce[:])
-	if err != nil {
-		return 0, fmt.Errorf("read nonce: %w", err)
+	if readSize, err := io.ReadFull(sr.Reader, nonce[:]); err != nil {
+		return readSize, fmt.Errorf("read nonce: %w", err)
 	}
 
 	readerMessage := make([]byte, len(message)+box.Overhead)
-	n, err = sr.Reader.Read(readerMessage)
+	readSize, err := sr.Reader.Read(readerMessage)
 	if err != nil {
-		return 0, fmt.Errorf("read message: %w", err)
+		return readSize, fmt.Errorf("read message: %w", err)
 	}
 
-	dec, ok := box.Open(message[:0], readerMessage[:n], &nonce, sr.pub, sr.priv)
+	dec, ok := box.Open(message[:0], readerMessage[:readSize], &nonce, sr.pub, sr.priv)
 	if !ok {
 		return 0, fmt.Errorf("open message: %w", err)
 	}
@@ -124,24 +123,20 @@ func Serve(l net.Listener) error {
 
 		go func(conn net.Conn) {
 			defer conn.Close()
-			// handshake: write our public key
+
 			if _, err := conn.Write(pub[:]); err != nil {
-				log.Println("handshake failed:", err)
-				return
+				log.Fatalf("writing public key: %v", err)
 			}
-			// handshake: read the client's public key
 			var publicKey [32]byte
 			if _, err := io.ReadFull(conn, publicKey[:]); err != nil {
-				log.Println("handshake failed:", err)
-				return
+				log.Fatalf("reading public key: %v", err)
 			}
 
 			secureWriter := NewSecureWriter(conn, priv, &publicKey)
 			secureReader := NewSecureReader(conn, priv, &publicKey)
 
-			n, err := io.Copy(secureWriter, secureReader)
-			if err != nil {
-				log.Println("echo failed:", err, n)
+			if _, err := io.Copy(secureWriter, secureReader); err != nil {
+				log.Fatalf("starting echo: %v", err)
 			}
 		}(conn)
 	}
