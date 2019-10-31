@@ -27,9 +27,9 @@ func NewSecureReader(r io.Reader, priv *[32]byte, pub *[32]byte) io.Reader {
 // Read will read the given encrypted message and attempt to decrypt it
 func (sr *SecureReader) Read(message []byte) (int, error) {
 	var nonce [24]byte
-	fmt.Printf("reader: %v\n", sr.Reader)
-	if readSize, err := io.ReadFull(sr.Reader, nonce[:]); err != nil {
-		return readSize, fmt.Errorf("read nonce: %w", err)
+
+	if _, err := io.ReadFull(sr.Reader, nonce[:]); err != nil {
+		return 0, fmt.Errorf("read nonce: %w", err)
 	}
 
 	readerMessage := make([]byte, len(message)+box.Overhead)
@@ -67,8 +67,8 @@ func (sw *SecureWriter) Write(message []byte) (int, error) {
 
 	encryptedMessage := box.Seal(nonce[:], message, &nonce, sw.pub, sw.priv)
 
-	if _, err := sw.Writer.Write(encryptedMessage); err != nil {
-		return 0, err
+	if n, err := sw.Writer.Write(encryptedMessage); err != nil {
+		return n, err
 	}
 
 	return len(message), nil
