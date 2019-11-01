@@ -28,19 +28,20 @@ func NewSecureReader(r io.Reader, priv *[32]byte, pub *[32]byte) io.Reader {
 func (sr *SecureReader) Read(message []byte) (int, error) {
 	var nonce [24]byte
 
-	if _, err := io.ReadFull(sr.Reader, nonce[:]); err != nil {
-		return 0, fmt.Errorf("read nonce: %w", err)
+	readSize, err := io.ReadFull(sr.Reader, nonce[:])
+	if err != nil {
+		return readSize, fmt.Errorf("read nonce: %w", err)
 	}
 
 	readerMessage := make([]byte, len(message)+box.Overhead)
-	readSize, err := sr.Reader.Read(readerMessage)
+	readSize, err = sr.Reader.Read(readerMessage)
 	if err != nil {
 		return readSize, fmt.Errorf("read message: %w", err)
 	}
 
 	dec, ok := box.Open(message[:0], readerMessage[:readSize], &nonce, sr.pub, sr.priv)
 	if !ok {
-		return 0, fmt.Errorf("open message: %w", err)
+		return readSize, fmt.Errorf("open message: %w", err)
 	}
 
 	return len(dec), nil
@@ -67,8 +68,8 @@ func (sw *SecureWriter) Write(message []byte) (int, error) {
 
 	encryptedMessage := box.Seal(nonce[:], message, &nonce, sw.pub, sw.priv)
 
-	if n, err := sw.Writer.Write(encryptedMessage); err != nil {
-		return n, err
+	if writeSize, err := sw.Writer.Write(encryptedMessage); err != nil {
+		return writeSize, err
 	}
 
 	return len(message), nil
